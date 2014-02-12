@@ -786,9 +786,9 @@ Value sendfrom(const Array& params, bool fHelp)
 
 Value sendmany(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() < 2 || params.size() > 4)
+    if (fHelp || params.size() < 2 || params.size() > 5)
         throw runtime_error(
-            "sendmany \"fromaccount\" {\"address\":amount,...} ( minconf \"comment\" )\n"
+            "sendmany \"fromaccount\" {\"address\":amount,...} ( minconf \"comment\" allowoverdraft)\n"
             "\nSend multiple times. Amounts are double-precision floating point numbers."
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
@@ -800,6 +800,7 @@ Value sendmany(const Array& params, bool fHelp)
             "    }\n"
             "3. minconf                 (numeric, optional, default=1) Only use the balance confirmed at least this many times.\n"
             "4. \"comment\"             (string, optional) A comment\n"
+            "5. allowoverdraft          (boolean, optional, default=false) Whether to allow sending from an account that has insufficient funds.\n"
             "\nResult:\n"
             "\"transactionid\"          (string) The transaction id for the send. Only 1 transaction is created regardless of \n"
             "                                    the number of addresses. See https://blockchain.info/tx/[transactionid]\n"
@@ -822,6 +823,10 @@ Value sendmany(const Array& params, bool fHelp)
     wtx.strFromAccount = strAccount;
     if (params.size() > 3 && params[3].type() != null_type && !params[3].get_str().empty())
         wtx.mapValue["comment"] = params[3].get_str();
+
+    bool fAllowOverdraft = false;
+    if (params.size() > 4)
+        fAllowOverdraft = params[4].get_bool();
 
     set<CBitcoinAddress> setAddress;
     vector<pair<CScript, int64_t> > vecSend;
@@ -849,7 +854,7 @@ Value sendmany(const Array& params, bool fHelp)
 
     // Check funds
     int64_t nBalance = GetAccountBalance(strAccount, nMinDepth);
-    if (totalAmount > nBalance)
+    if (!fAllowOverdraft && totalAmount > nBalance)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
 
     // Send
