@@ -830,7 +830,6 @@ Value getnormalizedtxid(const Array& params, bool fHelp)
     catch (std::exception &e) {
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
     }
-    uint256 hashNormalized = tx.GetNormalizedHash();
 
-    return hashNormalized.GetHex();
+    return "tx" + tx.GetNormalizedHash().GetCodedBase32();
 }
