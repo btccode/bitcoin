@@ -805,7 +805,18 @@ Value sendrawtransaction(const Array& params, bool fHelp)
 Value getnormalizedtxid(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
-        throw runtime_error("blah");
+        throw runtime_error(
+            "getnormalizedtxid \"hexstring\"\n"
+            "\nReturns the normalized / canonical transaction hash (ntxid), suitable\n"
+            "for comparing malleated transactions under certain circumstances. The ntxid\n"
+            "covers the inputs and outputs, but not the scriptSigs of the passed in raw\n"
+            "transaction. The result is a 64-character base32 string which includes the"
+            "normalized hash and error correction codes.\n"
+            "\nArguments:\n"
+            "1. \"hexstring\"    (string, required) The hex string of the raw transaction)\n"
+            "\nResult:\n"
+            "\"ntxid\"           (string) The normalized transaction hash in coded base32\n"
+        );
 
     // parse hex string from parameter
     vector<unsigned char> txData(ParseHexV(params[0], "parameter"));
