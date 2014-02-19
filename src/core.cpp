@@ -79,7 +79,10 @@ uint256 CTransaction::GetHash() const
 
 uint256 CTransaction::GetNormalizedHash() const
 {
-    return SignatureHash(CScript(), *this, 0, SIGHASH_ALL);
+    if (IsCoinBase())
+        return GetHash();
+    else
+        return SignatureHash(CScript(), *this, 0, SIGHASH_ALL);
 }
 
 bool CTransaction::IsNewerThan(const CTransaction& old) const
