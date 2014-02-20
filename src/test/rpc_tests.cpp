@@ -1,3 +1,5 @@
+#include "data/tx_normalizedtxid.json.h"
+
 #include "rpcserver.h"
 #include "rpcclient.h"
 
@@ -8,6 +10,9 @@
 
 using namespace std;
 using namespace json_spirit;
+
+// In script_tests.cpp
+extern Array read_json(const std::string& jsondata);
 
 Array
 createArgs(int nRequired, const char* address1=NULL, const char* address2=NULL)
@@ -132,6 +137,28 @@ BOOST_AUTO_TEST_CASE(rpc_parse_monetary_values)
     BOOST_CHECK(AmountFromValue(ValueFromString("1.00000000")) == 100000000LL);
     BOOST_CHECK(AmountFromValue(ValueFromString("20999999.9999999")) == 2099999999999990LL);
     BOOST_CHECK(AmountFromValue(ValueFromString("20999999.99999999")) == 2099999999999999LL);
+}
+
+BOOST_AUTO_TEST_CASE( getnormalizedtxid )
+{
+    Array tests = read_json(std::string(
+        json_tests::tx_normalizedtxid,
+        json_tests::tx_normalizedtxid + sizeof(json_tests::tx_normalizedtxid)));
+    BOOST_FOREACH(Value& tv, tests)
+    {
+        Array test = tv.get_array();
+        string strTest = write_string(tv, false);
+        if (test.size() < 3) // Allow for extra stuff (useful for comments)
+        {
+            BOOST_ERROR("Bad test: " << strTest);
+            continue;
+        }
+
+        std::string txdata = test[0].get_str();
+        std::string ntxid  = "tx" + test[2].get_str();
+        std::string result = CallRPC(string("getnormalizedtxid ") + txdata).get_str();
+        BOOST_CHECK_MESSAGE(result == ntxid, strTest + " - result:" + result);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

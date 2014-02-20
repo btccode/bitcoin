@@ -2,6 +2,7 @@
 
 #include "data/tx_invalid.json.h"
 #include "data/tx_valid.json.h"
+#include "data/tx_normalizedtxid.json.h"
 
 #include "key.h"
 #include "keystore.h"
@@ -10,6 +11,8 @@
 
 #include <map>
 #include <string>
+
+#include <boost/lexical_cast.hpp>
 
 #include <boost/test/unit_test.hpp>
 #include "json/json_spirit_writer_template.h"
@@ -306,6 +309,52 @@ BOOST_AUTO_TEST_CASE(test_IsStandard)
     t.vout[0].scriptPubKey = CScript() << OP_RETURN;
     t.vout[1].scriptPubKey = CScript() << OP_RETURN;
     BOOST_CHECK(!IsStandardTx(t, reason));
+}
+
+BOOST_AUTO_TEST_CASE(tx_normalizedtxid)
+{
+    Array tests = read_json(std::string(
+        json_tests::tx_normalizedtxid,
+        json_tests::tx_normalizedtxid + sizeof(json_tests::tx_normalizedtxid)));
+    BOOST_FOREACH(Value& tv, tests)
+    {
+        Array test = tv.get_array();
+        string strTest = write_string(tv, false);
+        if (test.size() < 3) // Allow for extra stuff (useful for comments)
+        {
+            BOOST_ERROR("Bad test: " << strTest);
+            continue;
+        }
+
+        // Read parameters
+        std::string txHex          = test[0].get_str();
+        std::string strNTxID       = test[1].get_str();
+        std::string strCodedBase32 = test[2].get_str();
+
+        // parse hex string from parameter
+        vector<unsigned char> txData(ParseHex(txHex));
+        CDataStream ssData(txData, SER_NETWORK, PROTOCOL_VERSION);
+        CTransaction tx;
+
+        // deserialize transaciton data
+        ssData >> tx;
+
+        // deserialize normalized transaction ID
+        uint256 hashNTxID;
+        hashNTxID.SetHex(strNTxID);
+
+        BOOST_CHECK_MESSAGE(tx.GetNormalizedHash() == hashNTxID,
+            strTest + " - tx normalized hash: " + tx.GetNormalizedHash().GetHex());
+        BOOST_CHECK_MESSAGE(tx.GetNormalizedHash().GetCodedBase32() == strCodedBase32,
+            strTest + " - coded base32: " + tx.GetNormalizedHash().GetCodedBase32());
+
+        uint256 hash; int nExtra;
+        hash.SetCodedBase32(strCodedBase32, &nExtra);
+        BOOST_CHECK_MESSAGE(hash == hashNTxID,
+            strTest + " - decoded normalized hash: " + hash.GetHex());
+        BOOST_CHECK_MESSAGE(nExtra == 0,
+            strTest + " - nExtra: " + boost::lexical_cast<string>(nExtra));
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
