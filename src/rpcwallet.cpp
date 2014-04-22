@@ -427,7 +427,7 @@ Value listaddressgroupings(const Array& params, bool fHelp)
         {
             Array addressInfo;
             addressInfo.push_back(CBitcoinAddress(address).ToString());
-            addressInfo.push_back(ValueFromAmount(balances[address]));
+            addressInfo.push_back(ValueFromAmount(balances[address], ROUND_TIES_TO_EVEN));
             {
                 LOCK(pwalletMain->cs_wallet);
                 if (pwalletMain->mapAddressBook.find(CBitcoinAddress(address).Get()) != pwalletMain->mapAddressBook.end())
@@ -544,7 +544,7 @@ Value getreceivedbyaddress(const Array& params, bool fHelp)
                     nAmount += txout.nValue;
     }
 
-    return  ValueFromAmount(nAmount);
+    return  ValueFromAmount(nAmount, ROUND_TOWARDS_ZERO);
 }
 
 
@@ -598,7 +598,7 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
         }
     }
 
-    return (double)nAmount / (double)COIN;
+    return ValueFromAmount(nAmount, ROUND_TOWARDS_ZERO);
 }
 
 
@@ -661,7 +661,7 @@ Value getbalance(const Array& params, bool fHelp)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (params.size() == 0)
-        return  ValueFromAmount(pwalletMain->GetBalance());
+        return  ValueFromAmount(pwalletMain->GetBalance(), ROUND_TOWARDS_ZERO);
 
     int nMinDepth = 1;
     if (params.size() > 1)
@@ -696,14 +696,14 @@ Value getbalance(const Array& params, bool fHelp)
                 nBalance -= s.amount;
             nBalance -= allFee;
         }
-        return  ValueFromAmount(nBalance);
+        return  ValueFromAmount(nBalance, ROUND_TOWARDS_ZERO);
     }
 
     string strAccount = AccountFromValue(params[0]);
 
     CAmount nBalance = GetAccountBalance(strAccount, nMinDepth, filter);
 
-    return ValueFromAmount(nBalance);
+    return ValueFromAmount(nBalance, ROUND_TOWARDS_ZERO);
 }
 
 Value getunconfirmedbalance(const Array &params, bool fHelp)
@@ -715,7 +715,7 @@ Value getunconfirmedbalance(const Array &params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    return ValueFromAmount(pwalletMain->GetUnconfirmedBalance());
+    return ValueFromAmount(pwalletMain->GetUnconfirmedBalance(), ROUND_TOWARDS_ZERO);
 }
 
 
@@ -1075,7 +1075,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
                 obj.push_back(Pair("involvesWatchonly", true));
             obj.push_back(Pair("address",       address.ToString()));
             obj.push_back(Pair("account",       strAccount));
-            obj.push_back(Pair("amount",        ValueFromAmount(nAmount)));
+            obj.push_back(Pair("amount",        ValueFromAmount(nAmount, ROUND_TIES_TO_EVEN)));
             obj.push_back(Pair("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf)));
             Array transactions;
             if (it != mapTally.end())
@@ -1100,7 +1100,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
             if((*it).second.fIsWatchonly)
                 obj.push_back(Pair("involvesWatchonly", true));
             obj.push_back(Pair("account",       (*it).first));
-            obj.push_back(Pair("amount",        ValueFromAmount(nAmount)));
+            obj.push_back(Pair("amount",        ValueFromAmount(nAmount, ROUND_TIES_TO_EVEN)));
             obj.push_back(Pair("confirmations", (nConf == std::numeric_limits<int>::max() ? 0 : nConf)));
             ret.push_back(obj);
         }
@@ -1206,9 +1206,9 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
             entry.push_back(Pair("account", strSentAccount));
             MaybePushAddress(entry, s.destination);
             entry.push_back(Pair("category", "send"));
-            entry.push_back(Pair("amount", ValueFromAmount(-s.amount)));
+            entry.push_back(Pair("amount", ValueFromAmount(-s.amount, ROUND_TIES_TO_EVEN)));
             entry.push_back(Pair("vout", s.vout));
-            entry.push_back(Pair("fee", ValueFromAmount(-nFee)));
+            entry.push_back(Pair("fee", ValueFromAmount(-nFee, ROUND_TIES_TO_EVEN)));
             if (fLong)
                 WalletTxToJSON(wtx, entry);
             ret.push_back(entry);
@@ -1243,7 +1243,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
                 {
                     entry.push_back(Pair("category", "receive"));
                 }
-                entry.push_back(Pair("amount", ValueFromAmount(r.amount)));
+                entry.push_back(Pair("amount", ValueFromAmount(r.amount, ROUND_TIES_TO_EVEN)));
                 entry.push_back(Pair("vout", r.vout));
                 if (fLong)
                     WalletTxToJSON(wtx, entry);
@@ -1263,7 +1263,7 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Ar
         entry.push_back(Pair("account", acentry.strAccount));
         entry.push_back(Pair("category", "move"));
         entry.push_back(Pair("time", acentry.nTime));
-        entry.push_back(Pair("amount", ValueFromAmount(acentry.nCreditDebit)));
+        entry.push_back(Pair("amount", ValueFromAmount(acentry.nCreditDebit, ROUND_TIES_TO_EVEN)));
         entry.push_back(Pair("otheraccount", acentry.strOtherAccount));
         entry.push_back(Pair("comment", acentry.strComment));
         ret.push_back(entry);
@@ -1453,7 +1453,7 @@ Value listaccounts(const Array& params, bool fHelp)
 
     Object ret;
     BOOST_FOREACH(const PAIRTYPE(string, CAmount)& accountBalance, mapAccountBalances) {
-        ret.push_back(Pair(accountBalance.first, ValueFromAmount(accountBalance.second)));
+        ret.push_back(Pair(accountBalance.first, ValueFromAmount(accountBalance.second, ROUND_TOWARDS_ZERO)));
     }
     return ret;
 }
@@ -1604,9 +1604,9 @@ Value gettransaction(const Array& params, bool fHelp)
     CAmount nNet = nCredit - nDebit;
     CAmount nFee = (wtx.IsFromMe(filter) ? wtx.GetValueOut() - nDebit : 0);
 
-    entry.push_back(Pair("amount", ValueFromAmount(nNet - nFee)));
+    entry.push_back(Pair("amount", ValueFromAmount(nNet - nFee, ROUND_TIES_TO_EVEN)));
     if (wtx.IsFromMe(filter))
-        entry.push_back(Pair("fee", ValueFromAmount(nFee)));
+        entry.push_back(Pair("fee", ValueFromAmount(nFee, ROUND_TIES_TO_EVEN)));
 
     WalletTxToJSON(wtx, entry);
 
@@ -2019,10 +2019,10 @@ Value settxfee(const Array& params, bool fHelp)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    // Amount
-    CAmount nAmount = 0;
-    if (params[0].get_real() != 0.0)
-        nAmount = AmountFromValue(params[0]);        // rejects 0.0 amounts
+    CAmount nAmount = AmountFromValue(params[0]); // rejects !MoneyRange
+    if (nAmount == 0)
+        throw JSONRPCError(RPC_TYPE_ERROR,
+                           "Zero transaction fee not allowed.");
 
     payTxFee = CFeeRate(nAmount, 1000);
     return true;
@@ -2054,9 +2054,9 @@ Value getwalletinfo(const Array& params, bool fHelp)
 
     Object obj;
     obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
-    obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance())));
-    obj.push_back(Pair("unconfirmed_balance", ValueFromAmount(pwalletMain->GetUnconfirmedBalance())));
-    obj.push_back(Pair("immature_balance",    ValueFromAmount(pwalletMain->GetImmatureBalance())));
+    obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance(), ROUND_TOWARDS_ZERO)));
+    obj.push_back(Pair("unconfirmed_balance", ValueFromAmount(pwalletMain->GetUnconfirmedBalance(), ROUND_TOWARDS_ZERO)));
+    obj.push_back(Pair("immature_balance",    ValueFromAmount(pwalletMain->GetImmatureBalance(), ROUND_TOWARDS_ZERO)));
     obj.push_back(Pair("txcount",       (int)pwalletMain->mapWallet.size()));
     obj.push_back(Pair("keypoololdest", pwalletMain->GetOldestKeyPoolTime()));
     obj.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));

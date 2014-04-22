@@ -78,7 +78,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, Object& entry)
     for (unsigned int i = 0; i < tx.vout.size(); i++) {
         const CTxOut& txout = tx.vout[i];
         Object out;
-        out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
+        out.push_back(Pair("value", ValueFromAmount(txout.nValue, ROUND_TIES_TO_EVEN)));
         out.push_back(Pair("n", (int64_t)i));
         Object o;
         ScriptPubKeyToJSON(txout.scriptPubKey, o, true);
@@ -294,7 +294,7 @@ Value listunspent(const Array& params, bool fHelp)
                     entry.push_back(Pair("redeemScript", HexStr(redeemScript.begin(), redeemScript.end())));
             }
         }
-        entry.push_back(Pair("amount",ValueFromAmount(nValue)));
+        entry.push_back(Pair("amount",ValueFromAmount(nValue, ROUND_TIES_TO_EVEN)));
         entry.push_back(Pair("confirmations",out.nDepth));
         entry.push_back(Pair("spendable", out.fSpendable));
         results.push_back(entry);

@@ -118,7 +118,12 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        READWRITE(nValue);
+        int64_t nValueI64;
+        if (!ser_action.ForRead())
+            nValueI64 = nValue.ToInt64(ROUND_SIGNAL);
+        READWRITE(nValueI64);
+        if (ser_action.ForRead())
+            nValue = nValueI64;
         READWRITE(scriptPubKey);
     }
 

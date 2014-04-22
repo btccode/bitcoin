@@ -193,7 +193,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
 
                 int nConf = nHeight - coins->nHeight;
 
-                dPriority += (double)nValueIn * nConf;
+                dPriority += nValueIn.ToDouble() * nConf;
             }
             if (fMissingInputs) continue;
 

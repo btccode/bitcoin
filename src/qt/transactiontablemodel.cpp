@@ -17,6 +17,7 @@
 #include "sync.h"
 #include "uint256.h"
 #include "util.h"
+#include "utilmoneystr.h"
 #include "wallet.h"
 
 #include <QColor>
@@ -549,7 +550,7 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         case ToAddress:
             return formatTxToAddress(rec, true);
         case Amount:
-            return qint64(rec->credit + rec->debit);
+            return QString::fromStdString(FormatMoney(rec->credit + rec->debit));
         }
         break;
     case Qt::ToolTipRole:
@@ -586,7 +587,7 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case LabelRole:
         return walletModel->getAddressTableModel()->labelForAddress(QString::fromStdString(rec->address));
     case AmountRole:
-        return qint64(rec->credit + rec->debit);
+        return QString::fromStdString(FormatMoney(rec->credit + rec->debit));
     case TxIDRole:
         return rec->getTxID();
     case TxHashRole:

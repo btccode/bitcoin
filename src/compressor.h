@@ -7,8 +7,33 @@
 #define BITCOIN_COMPRESSOR_H
 
 #include "primitives/transaction.h"
+#include "amount.h"
 #include "script/script.h"
 #include "serialize.h"
+
+class CCompressedAmount
+{
+protected:
+    CAmount& n;
+
+public:
+    static uint64_t CompressAmount(uint64_t nAmount);
+    static uint64_t DecompressAmount(uint64_t nAmount);
+
+    CCompressedAmount(CAmount& nIn) : n(nIn) {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+        uint64_t nVal = 0;
+        if (!ser_action.ForRead())
+            nVal = CompressAmount(static_cast<uint64_t>(n.ToInt64(ROUND_SIGNAL)));
+        READWRITE(VARINT(nVal));
+        if (ser_action.ForRead())
+            n = static_cast<int64_t>(DecompressAmount(nVal));
+    }
+};
 
 class CKeyID;
 class CPubKey;
@@ -98,23 +123,14 @@ private:
     CTxOut &txout;
 
 public:
-    static uint64_t CompressAmount(uint64_t nAmount);
-    static uint64_t DecompressAmount(uint64_t nAmount);
-
     CTxOutCompressor(CTxOut &txoutIn) : txout(txoutIn) { }
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        if (!ser_action.ForRead()) {
-            uint64_t nVal = CompressAmount(txout.nValue);
-            READWRITE(VARINT(nVal));
-        } else {
-            uint64_t nVal = 0;
-            READWRITE(VARINT(nVal));
-            txout.nValue = DecompressAmount(nVal);
-        }
+        CCompressedAmount cvalue(REF(txout.nValue));
+        READWRITE(cvalue);
         CScriptCompressor cscript(REF(txout.scriptPubKey));
         READWRITE(cscript);
     }

@@ -369,6 +369,7 @@ libbitcoinconsensus_la_SOURCES = \
   script/interpreter.cpp \
   script/script.cpp \
   uint256.cpp \
+  utilmoneystr.cpp \
   utilstrencodings.cpp
 
 if GLIBC_BACK_COMPAT

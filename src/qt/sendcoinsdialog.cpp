@@ -18,6 +18,7 @@
 #include "base58.h"
 #include "coincontrol.h"
 #include "ui_interface.h"
+#include "utilmoneystr.h"
 #include "wallet.h"
 
 #include <QMessageBox>
@@ -98,7 +99,7 @@ SendCoinsDialog::SendCoinsDialog(QWidget *parent) :
     if (!settings.contains("nSmartFeeSliderPosition"))
         settings.setValue("nSmartFeeSliderPosition", 0);
     if (!settings.contains("nTransactionFee"))
-        settings.setValue("nTransactionFee", (qint64)DEFAULT_TRANSACTION_FEE);
+        settings.setValue("nTransactionFee", QString::fromStdString(FormatMoney(DEFAULT_TRANSACTION_FEE)));
     if (!settings.contains("fPayOnlyMinFee"))
         settings.setValue("fPayOnlyMinFee", false);
     if (!settings.contains("fSendFreeTransactions"))
@@ -184,7 +185,7 @@ SendCoinsDialog::~SendCoinsDialog()
     settings.setValue("nFeeRadio", ui->groupFee->checkedId());
     settings.setValue("nCustomFeeRadio", ui->groupCustomFee->checkedId());
     settings.setValue("nSmartFeeSliderPosition", ui->sliderSmartFee->value());
-    settings.setValue("nTransactionFee", (qint64)ui->customFee->value());
+    settings.setValue("nTransactionFee", QString::fromStdString(FormatMoney(ui->customFee->value())));
     settings.setValue("fPayOnlyMinFee", ui->checkBoxMinimumFee->isChecked());
     settings.setValue("fSendFreeTransactions", ui->checkBoxFreeTx->isChecked());
 

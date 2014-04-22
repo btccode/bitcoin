@@ -532,7 +532,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
         entry.push_back(Pair("depends", deps));
 
         int index_in_template = i - 1;
-        entry.push_back(Pair("fee", pblocktemplate->vTxFees[index_in_template]));
+        entry.push_back(Pair("fee", ValueFromAmount(pblocktemplate->vTxFees[index_in_template], ROUND_TIES_TO_EVEN)));
         entry.push_back(Pair("sigops", pblocktemplate->vTxSigOps[index_in_template]));
 
         transactions.push_back(entry);
@@ -557,7 +557,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     result.push_back(Pair("previousblockhash", pblock->hashPrevBlock.GetHex()));
     result.push_back(Pair("transactions", transactions));
     result.push_back(Pair("coinbaseaux", aux));
-    result.push_back(Pair("coinbasevalue", (int64_t)pblock->vtx[0].vout[0].nValue));
+    result.push_back(Pair("coinbasevalue", ValueFromAmount(pblock->vtx[0].vout[0].nValue, ROUND_TOWARDS_ZERO)));
     result.push_back(Pair("longpollid", chainActive.Tip()->GetBlockHash().GetHex() + i64tostr(nTransactionsUpdatedLast)));
     result.push_back(Pair("target", hashTarget.GetHex()));
     result.push_back(Pair("mintime", (int64_t)pindexPrev->GetMedianTimePast()+1));
@@ -675,7 +675,7 @@ Value estimatefee(const Array& params, bool fHelp)
     if (feeRate == CFeeRate(0))
         return -1.0;
 
-    return ValueFromAmount(feeRate.GetFeePerK());
+    return ValueFromAmount(feeRate.GetFeePerK(), ROUND_AWAY_FROM_ZERO);
 }
 
 Value estimatepriority(const Array& params, bool fHelp)

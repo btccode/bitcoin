@@ -24,16 +24,16 @@
 BOOST_AUTO_TEST_SUITE(compress_tests)
 
 bool static TestEncode(uint64_t in) {
-    return in == CTxOutCompressor::DecompressAmount(CTxOutCompressor::CompressAmount(in));
+    return in == CCompressedAmount::DecompressAmount(CCompressedAmount::CompressAmount(in));
 }
 
 bool static TestDecode(uint64_t in) {
-    return in == CTxOutCompressor::CompressAmount(CTxOutCompressor::DecompressAmount(in));
+    return in == CCompressedAmount::CompressAmount(CCompressedAmount::DecompressAmount(in));
 }
 
 bool static TestPair(uint64_t dec, uint64_t enc) {
-    return CTxOutCompressor::CompressAmount(dec) == enc &&
-           CTxOutCompressor::DecompressAmount(enc) == dec;
+    return CCompressedAmount::CompressAmount(dec) == enc &&
+           CCompressedAmount::DecompressAmount(enc) == dec;
 }
 
 BOOST_AUTO_TEST_CASE(compress_amounts)

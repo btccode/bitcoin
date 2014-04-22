@@ -84,7 +84,7 @@ Value getinfo(const Array& params, bool fHelp)
 #ifdef ENABLE_WALLET
     if (pwalletMain) {
         obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
-        obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance())));
+        obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance(), ROUND_TOWARDS_ZERO)));
     }
 #endif
     obj.push_back(Pair("blocks",        (int)chainActive.Height()));
@@ -100,9 +100,9 @@ Value getinfo(const Array& params, bool fHelp)
     }
     if (pwalletMain && pwalletMain->IsCrypted())
         obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
-    obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
+    obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK(), ROUND_AWAY_FROM_ZERO)));
 #endif
-    obj.push_back(Pair("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK())));
+    obj.push_back(Pair("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK(), ROUND_AWAY_FROM_ZERO)));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
     return obj;
 }

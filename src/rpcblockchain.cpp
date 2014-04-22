@@ -192,7 +192,7 @@ Value getrawmempool(const Array& params, bool fHelp)
             const CTxMemPoolEntry& e = entry.second;
             Object info;
             info.push_back(Pair("size", (int)e.GetTxSize()));
-            info.push_back(Pair("fee", ValueFromAmount(e.GetFee())));
+            info.push_back(Pair("fee", ValueFromAmount(e.GetFee(), ROUND_TIES_TO_EVEN)));
             info.push_back(Pair("time", e.GetTime()));
             info.push_back(Pair("height", (int)e.GetHeight()));
             info.push_back(Pair("startingpriority", e.GetPriority(e.GetHeight())));
@@ -348,7 +348,7 @@ Value gettxoutsetinfo(const Array& params, bool fHelp)
         ret.push_back(Pair("txouts", (int64_t)stats.nTransactionOutputs));
         ret.push_back(Pair("bytes_serialized", (int64_t)stats.nSerializedSize));
         ret.push_back(Pair("hash_serialized", stats.hashSerialized.GetHex()));
-        ret.push_back(Pair("total_amount", ValueFromAmount(stats.nTotalAmount)));
+        ret.push_back(Pair("total_amount", ValueFromAmount(stats.nTotalAmount, ROUND_TIES_TO_EVEN)));
     }
     return ret;
 }
@@ -423,7 +423,7 @@ Value gettxout(const Array& params, bool fHelp)
         ret.push_back(Pair("confirmations", 0));
     else
         ret.push_back(Pair("confirmations", pindex->nHeight - coins.nHeight + 1));
-    ret.push_back(Pair("value", ValueFromAmount(coins.vout[n].nValue)));
+    ret.push_back(Pair("value", ValueFromAmount(coins.vout[n].nValue, ROUND_TIES_TO_EVEN)));
     Object o;
     ScriptPubKeyToJSON(coins.vout[n].scriptPubKey, o, true);
     ret.push_back(Pair("scriptPubKey", o));

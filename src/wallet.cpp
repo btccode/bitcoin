@@ -1052,7 +1052,7 @@ CAmount CWalletTx::GetCredit(const isminefilter& filter) const
     if (IsCoinBase() && GetBlocksToMaturity() > 0)
         return 0;
 
-    int64_t credit = 0;
+    CAmount credit = 0;
     if (filter & ISMINE_SPENDABLE)
     {
         // GetBalance can assume transactions in mapWallet won't change
@@ -1639,7 +1639,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, CAmount> >& vecSend,
                     int age = pcoin.first->GetDepthInMainChain();
                     if (age != 0)
                         age += 1;
-                    dPriority += (double)nCredit * age;
+                    dPriority += nCredit.ToDouble() * age;
                 }
 
                 CAmount nChange = nValueIn - nValue - nFeeRet;

@@ -21,6 +21,8 @@
 
 #include "ui_interface.h"
 
+#include "utilmoneystr.h"
+
 #include <QAction>
 #include <QActionGroup>
 #include <QFileDialog>
@@ -147,7 +149,7 @@ void WalletView::processNewTransaction(const QModelIndex& parent, int start, int
         return;
 
     QString date = ttm->index(start, TransactionTableModel::Date, parent).data().toString();
-    qint64 amount = ttm->index(start, TransactionTableModel::Amount, parent).data(Qt::EditRole).toULongLong();
+    CAmount amount = 0; ParseMoney(ttm->index(start, TransactionTableModel::Amount, parent).data(Qt::EditRole).toString().toStdString(), amount);
     QString type = ttm->index(start, TransactionTableModel::Type, parent).data().toString();
     QString address = ttm->index(start, TransactionTableModel::ToAddress, parent).data().toString();
 

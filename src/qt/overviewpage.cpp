@@ -15,6 +15,8 @@
 #include "transactiontablemodel.h"
 #include "walletmodel.h"
 
+#include "utilmoneystr.h"
+
 #include <QAbstractItemDelegate>
 #include <QPainter>
 
@@ -48,7 +50,7 @@ public:
 
         QDateTime date = index.data(TransactionTableModel::DateRole).toDateTime();
         QString address = index.data(Qt::DisplayRole).toString();
-        qint64 amount = index.data(TransactionTableModel::AmountRole).toLongLong();
+        CAmount amount = 0; ParseMoney(index.data(TransactionTableModel::AmountRole).toString().toStdString(), amount);
         bool confirmed = index.data(TransactionTableModel::ConfirmedRole).toBool();
         QVariant value = index.data(Qt::ForegroundRole);
         QColor foreground = option.palette.color(QPalette::Text);

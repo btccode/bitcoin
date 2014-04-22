@@ -7,6 +7,8 @@
 #include "transactiontablemodel.h"
 #include "transactionrecord.h"
 
+#include "utilmoneystr.h"
+
 #include <cstdlib>
 
 #include <QDateTime>
@@ -38,7 +40,9 @@ bool TransactionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex &
     bool involvesWatchAddress = index.data(TransactionTableModel::WatchonlyRole).toBool();
     QString address = index.data(TransactionTableModel::AddressRole).toString();
     QString label = index.data(TransactionTableModel::LabelRole).toString();
-    qint64 amount = llabs(index.data(TransactionTableModel::AmountRole).toLongLong());
+    CAmount amount;
+    if (!ParseMoney(index.data(TransactionTableModel::AmountRole).toString().toStdString(), amount))
+        return false;
     int status = index.data(TransactionTableModel::StatusRole).toInt();
 
     if(!showInactive && status == TransactionStatus::Conflicted)

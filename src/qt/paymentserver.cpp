@@ -12,6 +12,7 @@
 #include "chainparams.h"
 #include "ui_interface.h"
 #include "util.h"
+#include "utilmoneystr.h"
 #include "wallet.h"
 
 #include <cstdlib>
@@ -787,8 +788,8 @@ bool PaymentServer::verifyAmount(const CAmount& requestAmount)
     if (!fVerified) {
         qWarning() << QString("PaymentServer::%1: Payment request amount out of allowed range (%2, allowed 0 - %3).")
             .arg(__func__)
-            .arg(requestAmount)
-            .arg(MAX_MONEY);
+            .arg(QString::fromStdString(FormatMoney(requestAmount)))
+            .arg(QString::fromStdString(FormatMoney(MAX_MONEY)));
     }
     return fVerified;
 }

@@ -5,12 +5,12 @@
 
 #include "amount.h"
 
-#include "tinyformat.h"
+#include "utilmoneystr.h"
 
 CAmount CFeeRate::GetFee(size_t nSize) const
 {
     // calculate numerator
-    int64_t nFee = nFeePaid * nSize;
+    int64_t nFee = (nFeePaid * nSize).ToInt64(ROUND_AWAY_FROM_ZERO);
 
     // divide with integer arithmetic, rounding up
     nFee = (nFee + (nPerBytes - 1)) / nPerBytes;
@@ -20,6 +20,5 @@ CAmount CFeeRate::GetFee(size_t nSize) const
 
 std::string CFeeRate::ToString() const
 {
-    int64_t nSatoshisPerK = GetFeePerK();
-    return strprintf("%d.%08d BTC/kB", nSatoshisPerK / COIN, nSatoshisPerK % COIN);
+    return FormatMoney(GetFeePerK()) + " BTC/kB";
 }
