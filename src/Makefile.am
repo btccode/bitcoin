@@ -94,6 +94,7 @@ BITCOIN_CORE_H = \
   eccryptoverify.h \
   ecwrapper.h \
   hash.h \
+  hash_map.h \
   init.h \
   key.h \
   keystore.h \
