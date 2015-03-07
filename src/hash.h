@@ -38,6 +38,30 @@ public:
     }
 };
 
+/** A hasher class for Bitcoin's 224-bit hash (single SHA-256 + truncation). */
+class CHash224 {
+private:
+    CSHA256 sha;
+public:
+    static const size_t OUTPUT_SIZE = 28;
+
+    void Finalize(unsigned char hash[OUTPUT_SIZE]) {
+        unsigned char buf[sha.OUTPUT_SIZE];
+        sha.Finalize(buf);
+        std::copy(buf, buf+OUTPUT_SIZE, hash);
+    }
+
+    CHash224& Write(const unsigned char *data, size_t len) {
+        sha.Write(data, len);
+        return *this;
+    }
+
+    CHash224& Reset() {
+        sha.Reset();
+        return *this;
+    }
+};
+
 /** A hasher class for Bitcoin's 160-bit hash (SHA-256 + RIPEMD-160). */
 class CHash160 {
 private:
@@ -148,11 +172,52 @@ public:
     }
 };
 
+/** A writer stream (for serialization) that computes a 224-bit hash. */
+class CHashWriter224
+{
+private:
+    CHash224 ctx;
+
+public:
+    int nType;
+    int nVersion;
+
+    CHashWriter224(int nTypeIn, int nVersionIn) : nType(nTypeIn), nVersion(nVersionIn) {}
+
+    CHashWriter224& write(const char *pch, size_t size) {
+        ctx.Write((const unsigned char*)pch, size);
+        return (*this);
+    }
+
+    // invalidates the object
+    uint224 GetHash() {
+        uint224 result;
+        ctx.Finalize((unsigned char*)&result);
+        return result;
+    }
+
+    template<typename T>
+    CHashWriter224& operator<<(const T& obj) {
+        // Serialize to this stream
+        ::Serialize(*this, obj, nType, nVersion);
+        return (*this);
+    }
+};
+
 /** Compute the 256-bit hash of an object's serialization. */
 template<typename T>
 uint256 SerializeHash(const T& obj, int nType=SER_GETHASH, int nVersion=PROTOCOL_VERSION)
 {
     CHashWriter ss(nType, nVersion);
+    ss << obj;
+    return ss.GetHash();
+}
+
+/** Compute the 224-bit hash of an object's serialization. */
+template<typename T>
+uint224 SerializeHash224(const T& obj, int nType=SER_GETHASH, int nVersion=PROTOCOL_VERSION)
+{
+    CHashWriter224 ss(nType, nVersion);
     ss << obj;
     return ss.GetHash();
 }

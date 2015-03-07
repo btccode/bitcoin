@@ -104,6 +104,39 @@ public:
     explicit uint160(const std::vector<unsigned char>& vch) : base_blob<160>(vch) {}
 };
 
+/** 224-bit opaque blob.
+ * @note This type is called uint224 to conform with the naming patter of the
+ * other types uint160 and uint256, themselves named as such for historical
+ * reasons only. It is an opaque blob of 224 bits and has no integer operations.
+ */
+class uint224 : public base_blob<224> {
+public:
+    uint224() {}
+    uint224(const base_blob<224>& b) : base_blob<224>(b) {}
+    explicit uint224(const std::vector<unsigned char>& vch) : base_blob<224>(vch) {}
+};
+
+/* uint224 from const char *.
+ * This is a separate function because the constructor uint224(const char*) can result
+ * in dangerously catching uint224(0).
+ */
+inline uint224 uint224S(const char *str)
+{
+    uint224 rv;
+    rv.SetHex(str);
+    return rv;
+}
+/* uint224 from std::string.
+ * This is a separate function because the constructor uint256(const std::string &str) can result
+ * in dangerously catching uint224(0) via std::string(const char*).
+ */
+inline uint224 uint224S(const std::string& str)
+{
+    uint224 rv;
+    rv.SetHex(str);
+    return rv;
+}
+
 /** 256-bit opaque blob.
  * @note This type is called uint256 for historical reasons only. It is an
  * opaque blob of 256 bits and has no integer operations. Use arith_uint256 if
