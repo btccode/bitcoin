@@ -304,6 +304,101 @@ uint64_t ReadCompactSize(Stream& is)
 }
 
 /**
+ * Big-endian compact size -- preferred over regular (little-endian) compact
+ * size when lexographical ordering of the resultant serialization is required.
+ *  size <  253        -- 1 byte
+ *  size <= USHRT_MAX  -- 3 bytes  (253 + 2 BE bytes)
+ *  size <= UINT_MAX   -- 5 bytes  (254 + 4 BE bytes)
+ *  size >  UINT_MAX   -- 9 bytes  (255 + 8 BE bytes)
+ */
+template<typename Stream>
+void WriteBigCompactSize(Stream& os, uint64_t nSize)
+{
+    if (nSize < 253)
+    {
+        ser_writedata8(os, nSize);
+    }
+    else if (nSize <= std::numeric_limits<uint16_t>::max())
+    {
+        ser_writedata8(os, 253);
+        ser_writedata16(os, htons(nSize));
+    }
+    else if (nSize <= std::numeric_limits<uint32_t>::max())
+    {
+        ser_writedata8(os, 254);
+        ser_writedata32(os, htonl(nSize));
+    }
+    else
+    {
+        ser_writedata8(os, 255);
+        ser_writedata32(os, htonl(static_cast<uint32_t>(nSize >> 32)));
+        ser_writedata32(os, htonl(static_cast<uint32_t>(nSize & 0xffffffff)));
+    }
+    return;
+}
+
+template<typename Stream>
+uint64_t ReadBigCompactSize(Stream& is)
+{
+    uint8_t chSize = ser_readdata8(is);
+    uint64_t nSizeRet = 0;
+    if (chSize < 253)
+    {
+        nSizeRet = chSize;
+    }
+    else if (chSize == 253)
+    {
+        nSizeRet = ntohs(ser_readdata16(is));
+        if (nSizeRet < 253)
+            throw std::ios_base::failure("non-canonical ReadCompactSize()");
+    }
+    else if (chSize == 254)
+    {
+        nSizeRet = ntohl(ser_readdata32(is));
+        if (nSizeRet < 0x10000u)
+            throw std::ios_base::failure("non-canonical ReadCompactSize()");
+    }
+    else
+    {
+        nSizeRet = static_cast<uint64_t>(ntohl(ser_readdata32(is))) << 32
+                 | static_cast<uint64_t>(ntohl(ser_readdata32(is)));
+        if (nSizeRet < 0x100000000LLu)
+            throw std::ios_base::failure("non-canonical ReadCompactSize()");
+    }
+    if (nSizeRet > (uint64_t)MAX_SIZE)
+        throw std::ios_base::failure("ReadCompactSize(): size too large");
+    return nSizeRet;
+}
+
+template<typename I>
+class CBigCompactSize
+{
+protected:
+    I& n;
+public:
+    CBigCompactSize(I& nIn) : n(nIn) {}
+
+    unsigned int GetSerializeSize(int, int) const {
+        return GetSizeOfCompactSize(n);
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s, int, int) const {
+        WriteBigCompactSize<Stream>(s, static_cast<uint64_t>(n));
+    }
+
+    template<typename Stream>
+    void Unserialize(Stream& s, int, int) {
+        n = static_cast<I>(ReadBigCompactSize<Stream>(s));
+    }
+};
+
+template<typename I>
+CBigCompactSize<I> WrapBigCompactSize(I& n) { return CBigCompactSize<I>(n); }
+
+#define BIGCOMPACTSIZE(obj)  REF(WrapBigCompactSize(REF(obj)))
+
+/**
  * Variable-length integers: bytes are a MSB base-128 encoding of the number.
  * The high bit in each byte signifies whether another digit follows. To make
  * sure the encoding is one-to-one, one is subtracted from all but the last digit.
