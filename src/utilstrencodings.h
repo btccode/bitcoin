@@ -95,4 +95,10 @@ bool TimingResistantEqual(const T& a, const T& b)
     return accumulator == 0;
 }
 
+// A helper table used for reversing the bits of an octet (byte). Use the
+// octet as an index into the table, and the value returned is the same octet
+// with its bits reversed: bit 0 is swapped with bit 7, bit 1 with bit 6, bit
+// 2 with bit 5, and bit 3 with bit 4.
+extern const unsigned char vReverseBitsOfOctet[256];
+
 #endif // BITCOIN_UTILSTRENCODINGS_H
