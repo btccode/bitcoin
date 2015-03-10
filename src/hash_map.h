@@ -975,10 +975,15 @@ public:
     typedef typename _Value_allocator::pointer pointer;
     typedef typename _Value_allocator::const_pointer const_pointer;
 
-    // iterator
-    // const_iterator
-    // reverse_iterator
-    // const_reverse_iterator
+    // FIXME: How do we implement iterators here? There's significant tooling
+    //        in the standard library for implementing iterators for STL-like
+    //        containers. See <iterator>, for example. We should make use of
+    //        that. Obviously what is here right now won't work, but will get
+    //        the stub methods to compile.
+    typedef node_type* iterator;
+    typedef const node_type* const_iterator;
+    typedef node_type* reverse_iterator;
+    typedef const node_type* const_reverse_iterator;
 
     // key_comapre ?
     // value_compare ?
@@ -1006,6 +1011,30 @@ public:
         : _serializer(serializerIn)
         , _allocator(allocatorIn)
         , _root(), _first(0), _last(0) {}
+
+    template<class InputIterator>
+    CHashMap(InputIterator first, InputIterator last,
+             const allocator_type& allocatorIn = allocator_type());
+
+    template<class InputIterator>
+    CHashMap(InputIterator first, InputIterator last,
+             const serializer_type& serializerIn,
+             const allocator_type& allocatorIn = allocator_type());
+
+    CHashMap(const container_type& x,
+             const allocator_type& allocatorIn = allocator_type());
+
+    CHashMap(const container_type& x,
+             const serializer_type& serializerIn,
+             const allocator_type& allocatorIn = allocator_type());
+
+    ~CHashMap() { /* FIXME */ }
+
+    container_type& operator=(const container_type& x);
+
+    void swap(container_type& x);
+
+    void clear() throw();
 
 protected:
     bool _GetNodeByKey(const prefix_type& key, prefix_type& prefix, const node_type*& pnode) const
@@ -1052,6 +1081,27 @@ public:
     const_reference cback() const
         { return _last? _last->value: SENTINAL; }
 
+    data_type& operator[](const key_type& k);
+
+    data_type& at(const key_type& k);
+    const data_type& at(const key_type& k) const;
+
+    // Iterators
+    iterator begin() throw();
+    const_iterator begin() const throw();
+    iterator end() throw();
+    const_iterator end() const throw();
+
+    reverse_iterator rbegin() throw();
+    const_reverse_iterator rbegin() const throw();
+    reverse_iterator rend() throw();
+    const_reverse_iterator rend() const throw();
+
+    const_iterator cbegin() const throw();
+    const_iterator cend() const throw();
+    const_reverse_iterator crbegin() const throw();
+    const_reverse_iterator crend() const throw();
+
     // Capacity
     bool empty() const
         { return !_root.GetLength(); }
@@ -1061,6 +1111,49 @@ public:
 
     size_type max_size() const
         { return std::numeric_limits<size_type>::max(); }
+
+    // Modifiers: insert
+    std::pair<iterator,bool> insert(const value_type& val);
+    iterator insert(const_iterator position, const value_type& val);
+
+    template <class InputIterator>
+    void insert(InputIterator first, InputIterator last);
+
+    // Modifiers: erase
+    iterator erase(const_iterator position);
+    size_type erase(const key_type& k);
+    iterator erase(const_iterator first, const_iterator last);
+
+    // Modifiers: prune
+    //
+    // Like erase(), but marks the values as pruned and deallocates storage,
+    // triming branches as necessary, but does not modify root hash of the
+    // tree.
+    iterator prune(const_iterator position);
+    size_type prune(const key_type& k);
+    iterator prune(const_iterator first, const_iterator last);
+
+    // Modifiers: trim
+    //
+    // Trims any value beginning with the specified prefix.
+    iterator trim(const_iterator position);
+    size_type trim(const key_type& k);
+    size_type trim(const prefix_type& p);
+
+    // Operations
+    iterator find(const key_type& k);
+    const_iterator find(const key_type& k) const;
+
+    size_type count(const key_type& k) const;
+
+    iterator lower_bound(const key_type& k);
+    const_iterator lower_bound(const key_type& k) const;
+
+    iterator upper_bound(const key_type& k);
+    const_iterator upper_bound(const key_type& k) const;
+
+    std::pair<iterator,iterator> equal_range(const key_type& k);
+    std::pair<const_iterator,const_iterator> equal_range(const key_type& k) const;
 
 public:
     unsigned int GetSerializeSize(int nType, int nVersion) const
