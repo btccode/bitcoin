@@ -656,23 +656,53 @@ bool IsStandardTx(const CTransaction& tx, string& reason)
     return true;
 }
 
-bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime)
+int64_t LockTime(const CTransaction &tx, const CCoinsView* pCoinsView, int nBlockHeight, int64_t nBlockTime)
 {
     AssertLockHeld(cs_main);
 
-    if (nBlockHeight == 0)
-        nBlockHeight = chainActive.Height();
-    if (nBlockTime == 0)
-        nBlockTime = GetAdjustedTime();
+    if (pCoinsView == 0)
+        pCoinsView = pcoinsTip;
+
+    CCoins coins;
+    uint32_t nLockTime;
+
+    int nMinHeight = 0;
+    int64_t nMinTime = 0;
 
     bool fFinalized = true;
-    BOOST_FOREACH(const CTxIn& txin, tx.vin)
-        fFinalized = fFinalized && !~txin.nSequence;
+    BOOST_FOREACH(const CTxIn& txin, tx.vin) {
+        nLockTime = (int64_t)~txin.nSequence;
+        if (!nLockTime)
+            continue;
+        else
+            fFinalized = false;
+        if (!pCoinsView->GetCoins(txin.prevout.hash, coins))
+            continue; // Skip this input if it is not in the UTXO set.
+                      // This should only happen in non-consensus code.
+        if (nLockTime < LOCKTIME_THRESHOLD)
+            nMinHeight = std::max(nMinHeight, coins.nHeight + (int)nLockTime - 1);
+        else
+            nMinTime = std::max(nMinTime, (int64_t)pindexBestHeader->GetAncestor(coins.nHeight)->nTime - LOCKTIME_THRESHOLD + nLockTime);
+    }
 
-    if (!fFinalized && (int64_t)tx.nLockTime >= ((int64_t)tx.nLockTime < LOCKTIME_THRESHOLD ? (int64_t)nBlockHeight : nBlockTime))
-        return false;
+    if ((int64_t)tx.nLockTime < LOCKTIME_THRESHOLD)
+        nMinHeight = std::max(nMinHeight, (int)tx.nLockTime);
+    else
+        nMinTime = std::max(nMinTime, (int64_t)tx.nLockTime);
 
-    return true;
+    if (!fFinalized) {
+        if (nBlockHeight == 0)
+            nBlockHeight = chainActive.Height();
+        if (nBlockTime == 0)
+            nBlockTime = GetAdjustedTime();
+
+        if (nMinHeight >= nBlockHeight)
+            return nMinHeight;
+        if (nMinTime >= nBlockTime)
+            return nMinTime;
+    }
+
+    return 0;
 }
 
 /**
@@ -888,26 +918,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                          error("AcceptToMemoryPool: nonstandard transaction: %s", reason),
                          REJECT_NONSTANDARD, reason);
 
-    // Only accept nLockTime-using transactions that can be mined in the next
-    // block; we don't want our mempool filled up with transactions that can't
-    // be mined yet.
-    //
-    // However, IsFinalTx() is confusing... Without arguments, it uses
-    // chainActive.Height() to evaluate nLockTime; when a block is accepted,
-    // chainActive.Height() is set to the value of nHeight in the block.
-    // However, when IsFinalTx() is called within CBlock::AcceptBlock(), the
-    // height of the block *being* evaluated is what is used. Thus if we want
-    // to know if a transaction can be part of the *next* block, we need to
-    // call IsFinalTx() with one more than chainActive.Height().
-    //
-    // Timestamps on the other hand don't get any special treatment, because we
-    // can't know what timestamp the next block will have, and there aren't
-    // timestamp applications where it matters.
-    if (!IsFinalTx(tx, chainActive.Height() + 1))
-        return state.DoS(0,
-                         error("AcceptToMemoryPool: non-final"),
-                         REJECT_NONSTANDARD, "non-final");
-
     // is it already in the memory pool?
     uint256 hash = tx.GetHash();
     if (pool.exists(hash))
@@ -965,6 +975,26 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         // we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
         view.SetBackend(dummy);
         }
+
+        // Only accept nLockTime-using transactions that can be mined in the next
+        // block; we don't want our mempool filled up with transactions that can't
+        // be mined yet.
+        //
+        // However, LockTime() is confusing... Without arguments, it uses
+        // chainActive.Height() to evaluate nLockTime; when a block is accepted,
+        // chainActive.Height() is set to the value of nHeight in the block.
+        // However, when LockTime() is called within CBlock::AcceptBlock(), the
+        // height of the block *being* evaluated is what is used. Thus if we want
+        // to know if a transaction can be part of the *next* block, we need to
+        // call LockTime() with one more than chainActive.Height().
+        //
+        // Timestamps on the other hand don't get any special treatment, because we
+        // can't know what timestamp the next block will have, and there aren't
+        // timestamp applications where it matters.
+        if (LockTime(tx, &view, chainActive.Height() + 1))
+            return state.DoS(0,
+                             error("AcceptToMemoryPool: non-final"),
+                             REJECT_NONSTANDARD, "non-final");
 
         // Check for non-standard pay-to-script-hash in inputs
         if (Params().RequireStandard() && !AreInputsStandard(tx, view))
@@ -2690,7 +2720,7 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
 
     // Check that all transactions are finalized
     BOOST_FOREACH(const CTransaction& tx, block.vtx)
-        if (!IsFinalTx(tx, nHeight, block.GetBlockTime())) {
+        if (LockTime(tx, pcoinsTip, nHeight, block.GetBlockTime())) {
             return state.DoS(10, error("%s: contains a non-final transaction", __func__), REJECT_INVALID, "bad-txns-nonfinal");
         }
 

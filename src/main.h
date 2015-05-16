@@ -334,7 +334,7 @@ bool CheckTransaction(const CTransaction& tx, CValidationState& state);
  */
 bool IsStandardTx(const CTransaction& tx, std::string& reason);
 
-bool IsFinalTx(const CTransaction &tx, int nBlockHeight = 0, int64_t nBlockTime = 0);
+int64_t LockTime(const CTransaction &tx, const CCoinsView* pCoinsView = 0, int nBlockHeight = 0, int64_t nBlockTime = 0);
 
 /** 
  * Closure representing one script verification
