@@ -64,6 +64,17 @@ public:
     /* Setting nSequence to this value for every input in a transaction
      * disables nLockTime. */
     static const uint32_t SEQUENCE_FINAL = 0xffffffff;
+    /* Threshold for CTxIn::nSequence: below this value it is interpreted
+     * as a relative lock-time, otherwise ignored. */
+    static const uint32_t SEQUENCE_LOCKTIME_THRESHOLD = (1 << 31);
+     /* Threshold for CTxIn::nSequence when interpreted as a relative
+      * lock-time: below this value it has units of blocks, otherwise
+      * seconds. */
+    static const uint32_t SEQUENCE_UNITS_THRESHOLD = (1 << 30);
+    /* Number of reserved low-order bits (depending on units used) which
+     * are shifted out prior to relative lock-time constraint checking. */
+    static const int SEQUENCE_BLOCKS_OFFSET = 14;
+    static const int SEQUENCE_SECONDS_OFFSET = 5;
 
     CTxIn()
     {
