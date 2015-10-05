@@ -662,8 +662,9 @@ int64_t LockTime(const CTransaction &tx, int flags, const CCoinsView* pCoinsView
             fFinalized = false;
 
         // Do not enforce sequence numbers as a relative lock time
-        // unless we have been instructed to.
-        if (!fEnforceBIP68)
+        // unless we have been instructed to, and a view has been
+        // provided.
+        if (!(fEnforceBIP68 && pCoinsView))
             continue;
 
         // Sequence numbers equal to or above the locktime threshold
@@ -687,23 +688,11 @@ int64_t LockTime(const CTransaction &tx, int flags, const CCoinsView* pCoinsView
                 return std::numeric_limits<int64_t>::max();
         }
 
-        // In a few locations that follow we make reference to
-        // chainActive.Tip(). To prevent a race condition, we
-        // store a reference to the current tip.
-        const CBlockIndex& indexBestBlock = *chainActive.Tip();
-
         // coins.nHeight is MEMPOOL_HEIGHT (an absurdly high value)
         // if the parent transaction was from the mempool. We can't
         // know what height it will have once confirmed, but we
-        // assume it makes it in the next block.
-        //
-        // Note that in future versions of bitcoin it may not be the
-        // case that indexBestBlock is consistent with the passed
-        // in view (right now this won't happen in consensus code).
-        // The proper way to do this is to modify the view to return
-        // the height of the best block, or some other means of
-        // accessing that information.
-        int nCoinHeight = std::min(coins.nHeight, indexBestBlock.nHeight + 1);
+        // assume it makes it in the same block.
+        int nCoinHeight = std::min(coins.nHeight, nBlockHeight);
 
         if (txin.nSequence < CTxIn::SEQUENCE_UNITS_THRESHOLD) {
             // We subtract 1 from relative lock-times because a lock-
@@ -712,17 +701,30 @@ int64_t LockTime(const CTransaction &tx, int flags, const CCoinsView* pCoinsView
             // the semantics of "last invalid block height."
             nMinHeight = std::max(nMinHeight, nCoinHeight + (int)(txin.nSequence >> CTxIn::SEQUENCE_BLOCKS_OFFSET) - 1);
         } else {
+            // In two locations that follow we make reference to
+            // chainActive.Tip(). To prevent a race condition, we
+            // store a reference to the current tip.
+            const CBlockIndex& indexBestBlock = *chainActive.Tip();
+
+            // The only time the negative branch of this conditional
+            // is executed is when the prior output was taken from the
+            // mempool, in which case we assume it makes it into the
+            // same block (see above).
+            int64_t nCoinTime = (nCoinHeight <= (indexBestBlock.nHeight+1))
+                              ? indexBestBlock.GetAncestor(nCoinHeight-1)->GetMedianTimePast()
+                              : nBlockTime;
+
             // Time-based relative lock-times are measured from the
             // smallest allowed timestamp of the block containing the
             // txout being spent, which is the median time past of the
             // block prior. We subtract one for the same reason as
             // above.
             //
-            // Note that it is not guaranteed that indexBestBlock will
-            // be consistent with the passed in view. The proper thing
-            // to do is to have the view return time information about
-            // UTXOs.
-            nMinTime = std::max(nMinTime, indexBestBlock.GetAncestor(nCoinHeight-1)->GetMedianTimePast() + (int64_t)((txin.nSequence - CTxIn::SEQUENCE_UNITS_THRESHOLD) >> CTxIn::SEQUENCE_SECONDS_OFFSET) - 1);
+            // Note that it is not guaranteed that chainActive.Tip()
+            // will be consistent with the passed in view. The proper
+            // thing to do is to have the view return time information
+            // about UTXOs.
+            nMinTime = std::max(nMinTime, nCoinTime + (int64_t)((txin.nSequence - CTxIn::SEQUENCE_UNITS_THRESHOLD) >> CTxIn::SEQUENCE_SECONDS_OFFSET) - 1);
         }
     }
 
@@ -758,7 +760,8 @@ int64_t CheckLockTime(const CTransaction &tx, int flags)
     flags = std::max(flags, 0);
 
     // pcoinsTip contains the UTXO set for chainActive.Tip()
-    const CCoinsView *pCoinsView = pcoinsTip;
+    CCoinsViewMemPool viewMemPool(pcoinsTip, mempool);
+    const CCoinsView *pCoinsView = &viewMemPool;
 
     // CheckLockTime() uses chainActive.Height()+1 to evaluate
     // nLockTime because when LockTime() is called within
@@ -1869,6 +1872,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     CCheckQueueControl<CScriptCheck> control(fScriptChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
 
+    int nLockTimeFlags = 0;
     int64_t nTimeStart = GetTimeMicros();
     CAmount nFees = 0;
     int nInputs = 0;
@@ -1892,6 +1896,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             if (!view.HaveInputs(tx))
                 return state.DoS(100, error("ConnectBlock(): inputs missing/spent"),
                                  REJECT_INVALID, "bad-txns-inputs-missingorspent");
+
+            // Check that transaction is finalized
+            if (LockTime(tx, nLockTimeFlags, &view, pindex->nHeight, pindex->GetBlockTime()))
+                return state.DoS(100, error("ConnectBlock(): contains a non-final transaction", __func__),
+                                 REJECT_INVALID, "bad-txns-nonfinal");
 
             if (fStrictPayToScriptHash)
             {
@@ -2815,7 +2824,7 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIn
     // Check that all transactions are finalized
     BOOST_FOREACH(const CTransaction& tx, block.vtx) {
         int nLockTimeFlags = 0;
-        if (LockTime(tx, nLockTimeFlags, pcoinsTip, nHeight, block.GetBlockTime()))
+        if (LockTime(tx, nLockTimeFlags, NULL, nHeight, block.GetBlockTime()))
             return state.DoS(10, error("%s: contains a non-final transaction", __func__), REJECT_INVALID, "bad-txns-nonfinal");
     }
 
