@@ -1845,6 +1845,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     CCheckQueueControl<CScriptCheck> control(fScriptChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
 
+    int nLockTimeFlags = LOCKTIME_VERIFY_SEQUENCE
+                       | LOCKTIME_MEDIAN_TIME_PAST;
+    int64_t nLockTimeCutoff = pindex->GetBlockTime();
+    if (pindex->pprev && pindex->pprev->pprev)
+        nLockTimeCutoff = pindex->pprev->GetMedianTimePast();
+
     int64_t nTimeStart = GetTimeMicros();
     CAmount nFees = 0;
     int nInputs = 0;
@@ -1868,6 +1874,10 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             if (!view.HaveInputs(tx))
                 return state.DoS(100, error("ConnectBlock() : inputs missing/spent"),
                                  REJECT_INVALID, "bad-txns-inputs-missingorspent");
+
+            // Check that the transaction is finalized.
+            if (LockTime(tx, nLockTimeFlags, &view, pindex->nHeight, nLockTimeCutoff))
+                return state.DoS(100, error("ConnectBlock() : contains a non-final transaction"), REJECT_INVALID, "bad-txns-nonfinal");
 
             if (fStrictPayToScriptHash)
             {
@@ -2824,17 +2834,6 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
 bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIndex * const pindexPrev)
 {
     const int nHeight = pindexPrev == NULL ? 0 : pindexPrev->nHeight + 1;
-
-    // Check that all transactions are finalized
-    BOOST_FOREACH(const CTransaction& tx, block.vtx) {
-        int nLockTimeFlags = LOCKTIME_VERIFY_SEQUENCE
-                           | LOCKTIME_MEDIAN_TIME_PAST;
-        int64_t nLockTimeCutoff = (nLockTimeFlags & LOCKTIME_MEDIAN_TIME_PAST)
-                                ? pindexPrev->GetMedianTimePast()
-                                : block.GetBlockTime();
-        if (LockTime(tx, nLockTimeFlags, pcoinsTip, nHeight, nLockTimeCutoff))
-            return state.DoS(10, error("%s : contains a non-final transaction", __func__), REJECT_INVALID, "bad-txns-nonfinal");
-    }
 
     // Enforce block.nVersion=2 rule that the coinbase starts with serialized block height
     // if 750 of the last 1,000 blocks are version 2 or greater (51/100 if testnet):
