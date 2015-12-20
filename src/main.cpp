@@ -2290,12 +2290,26 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     int64_t nTime3 = GetTimeMicros(); nTimeConnect += nTime3 - nTime2;
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime3 - nTime2), 0.001 * (nTime3 - nTime2) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime3 - nTime2) / (nInputs-1), nTimeConnect * 0.000001);
 
-    CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
-    if (block.vtx[0].GetValueOut() > blockReward)
+    // The total amount of block reward that has been deferred so far.
+    CAmount nDeferredReward = pindex->pprev? pindex->pprev->nDeferredReward: 0LL;
+    // The amount of previously deferred block reward that can be claimed
+    // in return for a 20% smaller block (or the amount of reward that must
+    // be deferred for a 20% larger block):
+    CAmount nTargetDeferment = pindex->pprev? pindex->pprev->nTargetDeferment: 625000000LL;
+    // The maximum amount that can actually be reclaimed, which must be
+    // limited by the amount of deferred reward available so as to prevent
+    // inflation.
+    CAmount nMaxReclaimable = std::min(nTargetDeferment, nDeferredReward);
+
+    CAmount nBlockReward = nFees + GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
+    CAmount nCoinbaseOut = block.vtx[0].GetValueOut();
+    if (nCoinbaseOut > nBlockReward + nMaxReclaimable)
         return state.DoS(100,
                          error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
-                               block.vtx[0].GetValueOut(), blockReward),
+                               nCoinbaseOut, nBlockReward + nMaxReclaimable),
                                REJECT_INVALID, "bad-cb-amount");
+
+    int64_t nMaxBlockSize = GetAdjustedSize(MAX_BLOCK_SIZE, nTargetDeferment, nBlockReward, nCoinbaseOut);
 
     if (!control.Wait())
         return state.DoS(100, false);
