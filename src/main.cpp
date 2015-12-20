@@ -1390,6 +1390,165 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
     return nSubsidy;
 }
 
+/* From A Discipline of Programming, p.65 (EW Dijkstra)
+ * Description: https://www.mail-archive.com/kragen-hacks@canonical.org/msg00258.html
+ *
+ * The idea is that you have a pair of variables a and c such that the
+ * square root is in [a, a + c), and you do a binary search on that
+ * interval by cutting c in half and then possibly incrementing a by it.
+ *
+ *     p = a * c = low
+ *     q = c * c = shift
+ *     r = n - a * a = remaining
+ *     h = 2 * p + q = adjustment
+ *
+ * So, first you start with a=0 and c=1; then you increase c until it's
+ * big enough to encompass the range; then you keep halving the size of
+ * the range by dividing c by 2, which results in q being divided by 4
+ * and p by 2; then you have to figure out whether you want the lower
+ * half of the range or the upper half of it, which is what the final if
+ * statement is about.  At the time we encounter the if:
+ *
+ *     h = 2*p + q = 2*a*c + c*c.
+ *
+ * So
+ *
+ *     r - h = n - a*a - 2*a*c - c * c, = n - (a + c)^2
+ *
+ * So iff r >= h, then n >= (a+c)^2, which is to say, we want the
+ * upper half of the range; it was not enough to decrease c, we must also
+ * increase a by an increment of c. Now, a'+c' = a+c, so that guarantees we
+ * incremented it enough.
+ *
+ *     p + q = (a + c)*c
+ *
+ * which is the right number for the new p, and I already solved for r - h.
+ *
+ * Note: The following program will exhaustively test the entire input
+ *       range, a process which takes about 4.5min on a single core of my
+ *       Intel Core i7-3740QM CPU. That's too long to include as part of
+ *       the regression test suite, but should be re-verified any time
+ *       bitcoin is ported to a new ISA or compiler.
+ *
+ *     #include <iostream>
+ *
+ *     int main(int argc, char **argv)
+ *     {
+ *         std::pair<uint16_t, uint16_t> r;
+ *         uint32_t errors = 0, t;
+ *         for (uint32_t n  = std::numeric_limits<uint32_t>::min();
+ *                       n <= std::numeric_limits<uint32_t>::max() / 4;
+ *                     ++n)
+ *          {
+ *             if ( !(n % 0x100000) )
+ *                 std::cout << std::hex << n << "..." << std::endl;
+ *             r = dijkstra_sqrt(n);
+ *             t = r.first * r.first;
+ *             if ((t + r.second != n) || (t + 2*r.first < n)) {
+ *                 ++errors;
+ *                 std::cerr << "Failure: "
+ *                           <<  "n=" << n
+ *                           << ",p=" << r.first
+ *                           << ",r=" << r.second
+ *                           << std::endl;
+ *             }
+ *         }
+ *         if (errors)
+ *             std::cout << "Errors: " << errors << std::endl;
+ *         else
+ *             std::cout << "Success!" << std::endl;
+ *
+ *         return 0;
+ *     }
+ */
+std::pair<uint16_t, uint16_t> dijkstra_sqrt(uint32_t n) {
+    assert(n <= (std::numeric_limits<uint32_t>::max() / 4));
+    uint32_t p = 0;
+    uint32_t q = 1;
+    uint32_t r = n, h;
+    while (q <= n) q *= 4;
+    while (q != 1) {
+        q /= 4;
+        h  = p + q;
+        p /= 2;
+        if (r >= h) {
+            p += q;
+            r -= h;
+        }
+    }
+    return std::pair<uint16_t, uint16_t>
+        (static_cast<uint16_t>(p), static_cast<uint16_t>(r));
+}
+
+/*  In:    size :: base limit prior to adjustment
+ *       window :: the permitted window for deferrment
+ *       reward :: allowed subsidy + fees for the block
+ *      claimed :: actual block reward claimed
+ * Out: Adjusted size limit, within +/- 20% of size.
+ *
+ * A miner may choose to create a larger or smaller block by claiming
+ * less or more of the subsidy that is set aside for them. Such action
+ * temporarily increases or decreases the block size limit for just that
+ * block only by a factor of up to 20%.
+ *
+ * A quadratic function (sqrt) is used for the mapping of adjustment factor
+ * to deferred subsidy. This has the benefit of keeping variance small while
+ * still allowing reasonable burst capacity. The marginal cost of block space
+ * at the upper limit is 4x the marginal cost at the base.
+ *
+ * This has the consequence that it is economically rational for a miner
+ * to forego subsidy to include a transaction if that transaction pays a
+ * higher fee than the subsidy given up. The target parameter determines,
+ * indirectly, the sensitivity of block size adjustments to reward deferment
+ * and therefore how much subsidy has to be given up to add a basis point of
+ * block space from the base limit.
+ *
+ * A miner defering the maximum amount would temporarily increase the block
+ * size limit by +20% (120%), while claiming the maximum amount of deferred
+ * reward (if there is sufficient previously deferred reward available) would
+ * temporarily decrease the block size limit by -20% (80%). The marginal cost
+ * of extra space at the extremes of +/-20% is 4x the marginal cost with a
+ * claimed reward in the middle of just the normally allowed subsidy (100%
+ * limit).
+ */
+int64_t GetAdjustedSize(int64_t size, int64_t target, int64_t reward, int64_t claimed)
+{
+    int direction = 0; // -1 : smaller, 1 : larger
+    int64_t diff = 0;  // abs(reward - subsidy)
+    if ( claimed < reward )
+        direction =  1, diff = reward - claimed;
+    else if ( claimed > reward )
+        direction = -1, diff = claimed - reward;
+
+    // Clamp the difference to prevent overflow
+    diff = std::max((int64_t)0, diff);
+    diff = std::min(diff, target);
+
+    // factor = sqrt(40955x+67092481)-8191
+    //  In: 0..24573
+    // Out: 0..24573
+    //
+    // The Dijkstra integer sqrt implementation is quantized over 30-bit
+    // integers, so the input range is constrained by the fact that the
+    // maximum input to the sqrt function is 0x3fffffff. The largest
+    // value we actually pass in is 0x3ffc0010, the square of 0x7ffc,
+    // as this provides optimal digitization range without fractional
+    // representation.
+    //
+    // Plugging in the maximum input results in a maximum output of
+    // 24573, the same range as the input. This is then scaled to
+    // represent an adjustment in the range of 0% to 20%. Constant
+    // factors and shifts are selected to provide a function with a
+    // first derivative of 0.5 at the start of the input range, and
+    // 0.125 (a decrease of 4x) at the end.
+
+    diff *= 24573;
+    diff /= target;
+
+    const int16_t factor = dijkstra_sqrt(40955*diff + 67092481).first - 8191;
+    return size + direction * size * factor * 2 / 245730;
+}
+
 bool IsInitialBlockDownload()
 {
     const CChainParams& chainParams = Params();
